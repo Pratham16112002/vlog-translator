@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
 import { spawn } from 'child_process'
+import path from 'path'
 
 export default function GET(
   request: NextApiRequest,
@@ -12,11 +13,10 @@ export default function GET(
   }
   console.log('Video ID: ', video_id)
 
-  const scriptPath =
-    'D:/Code/transcriber/youtube-transcriber/scripts/download-audio.sh'
-
   // Use 'spawn' to execute the script with arguments
-  const cmd = spawn(scriptPath, [video_id || ''])
+  const cmd = spawn(path.join(process.cwd(), 'scripts/download-audio.sh'), [
+    video_id || ''
+  ])
 
   // Capture script output and errors
   cmd.stdout.on('data', data => {
@@ -24,15 +24,18 @@ export default function GET(
     response.write(data)
   })
 
-  cmd.stderr.on('data', data => {
-    console.error(`stderr: ${data}`)
-    response.write(`[Error] ${data}`)
+  cmd.stderr.on('data', chunk => {
+    const chunkStr = chunk.toString('utf-8')
+    console.log('[Error]', chunkStr)
+    response.write(
+      chunkStr
+        .split('\n')
+        .map((line: string) => '[Error] ' + line)
+        .join('\n')
+    )
   })
-
-  // Handle script exit
   cmd.on('close', code => {
-    console.log(`Finished command. Exit code: ${code}`)
-    response.end() // End the response when the script completes
+    console.log('Finished Command . Exit code: ', code)
   })
 
   response.writeHead(200, {
@@ -40,4 +43,6 @@ export default function GET(
     'Cache-Control': 'no-cache',
     'Content-Encoding': 'none'
   })
+
+  cmd.stdout.pipe(response)
 }
